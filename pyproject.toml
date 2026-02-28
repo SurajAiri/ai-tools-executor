@@ -1,24 +1,39 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-tools-executor"
-version = "0.0.1"
-description = "This project is a executor layer between AI Agents and AI Tools. Where Agent will have only two tools, i.e search and execute tool. The Tool Executor will internally search the tool, so that AI agent can only import the required tools rather than filling context with useless tools."
+version = "0.1.0"
+description = "An executor layer between AI agents and tools — 3 meta-tools, function-call syntax, AST parsing."
 readme = "README.md"
 authors = [
     { name = "Suraj Airi", email = "surajairi.ml@gmail.com" }
 ]
-license = { text = "MIT license" }
+license = { text = "MIT" }
 requires-python = ">=3.12"
+keywords = ["ai", "agent", "tools", "executor", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = []
 
 [dependency-groups]
 dev = [
     "ruff>=0.12.1",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
 ]
 
+[project.urls]
+Repository = "https://github.com/surajairi/ai-tools-executor"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -26,3 +41,6 @@ where = ["src"]
 [tool.setuptools.package-dir]
 "" = "src"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
