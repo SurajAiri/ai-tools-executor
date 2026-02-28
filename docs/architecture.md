@@ -1,6 +1,6 @@
 # AI Tools Executor — Architecture
 
-> **One-liner**: An executor layer that sits between AI agents and tools. The agent gets only **2 meta-tools** (`search_tools` + `execute`). Tools are discovered on-demand and invoked via **Python function call syntax** — not JSON.
+> **One-liner**: An executor layer that sits between AI agents and tools. The agent gets only **3 meta-tools** (`search_tools` + `execute` + `describe_tool`). Tools are discovered on-demand and invoked via **Python function call syntax** — not JSON.
 
 ---
 
@@ -20,14 +20,17 @@ With 50 tools at ~500 tokens each, that's **25,000 tokens wasted every turn** �
 
 ## The Solution
 
-The agent sees **exactly 2 tools** in its context:
+The agent sees **exactly 3 tools** in its context:
 
 | Meta-Tool | Purpose |
 |---|---|
 | `search_tools(query)` | Discover what tools are available |
 | `execute(calls)` | Run one or more tool calls |
+| `describe_tool(name)` | Get detailed docs + examples for a specific tool |
 
-Everything else — discovery, validation, execution, result formatting — happens **behind the scenes** inside the executor.
+`search_tools` returns concise signatures. `describe_tool` is the deep-dive — only called when the agent is confused about how a tool works. Everything else — validation, execution, result formatting — happens **behind the scenes** inside the executor.
+
+> **Note**: `describe_tool` is not compulsory. The system works with just `search_tools` + `execute`. It's a good-to-have that reduces retry loops when the agent needs more context about a tool's usage.
 
 ---
 
@@ -94,6 +97,23 @@ Agent returns:  get_stock_price(symbol='GOOG')
 
 No JSON parsing. No sandbox. No code execution risk. The executor **parses** the syntax tree (like an IDE does), extracts the function name and arguments, validates them, and calls the real function.
 
+### Partial Failure on Multi-Call
+
+When `execute` receives multiple calls and some succeed while others fail, it returns **partial results** — successes inline with failures:
+
+```python
+# Agent sends:
+execute("[get_stock_price(symbol='GOOG'), get_weather(city='')]")
+
+# Executor returns:
+[
+  {tool: "get_stock_price", status: "ok", result: {price: 182.63}},
+  {tool: "get_weather", status: "error", error: "ExecutionError: ..."}
+]
+```
+
+We don't throw away a valid stock price just because the weather call had a bad parameter. The agent gets everything that worked and can retry only what failed.
+
 ---
 
 ## Why Function Calls Instead of JSON?
@@ -139,6 +159,82 @@ tree = ast.parse(raw, mode="eval")
 
 This is exactly what IDEs, linters, and code highlighters do — parse the syntax tree, validate it, flag errors. Zero execution risk.
 
+### Error Recovery
+
+When the agent produces invalid syntax or bad parameters, the executor returns a **structured error** with the **exact exception message** — no translation, no context loss:
+
+```
+ExecutionError: Failed to parse tool call
+  Input:    get_stock_price(symbol="GOOG'
+  Error:    SyntaxError: EOL while scanning string literal (line 1, col 34)
+  Expected: get_stock_price(symbol: str)
+            """Fetch real-time stock price. symbol: ticker like 'GOOG', 'AAPL'."""
+  Hint:     Use matching quotes — either "GOOG" or 'GOOG'
+```
+
+| Field | Required | What it contains |
+|---|---|---|
+| **Input** | ✅ | Exactly what the agent sent |
+| **Error** | ✅ | Raw exception message — no translation, keep full context |
+| **Expected** | Optional | The function signature + `description` (same as `search_tools` returns) — helps the agent self-correct |
+| **Hint** | Optional | Actionable fix if an intelligent layer can generate one — skip if not available |
+
+The `Expected` field returns the same `description` that `search_tools` would return — the agent already knows how to read that format.
+
+### Parameter Validation
+
+Two layers of validation happen before a tool runs:
+
+**Layer 1 — AST-level** (handled by the executor):
+- Syntax valid? (`ast.parse`)
+- Function exists in registry?
+- Required parameters provided?
+- Parameter names match the signature?
+
+On error → return the function signature + `description` so the agent can self-correct.
+
+**Layer 2 — Value-level** (handled by the tool developer via Pydantic):
+- Is `symbol` a valid ticker format?
+- Is `max_results` within an acceptable range?
+
+This lives in the tool's own function definition, not in the executor. The executor catches Pydantic `ValidationError` and passes it through in the same structured format with the **raw error message preserved**:
+
+```
+ExecutionError: Parameter validation failed
+  Input:    get_stock_price(symbol="123INVALID")
+  Error:    ValidationError: symbol — string does not match regex '^[A-Z]{1,5}$'
+  Expected: get_stock_price(symbol: str)
+            """Fetch real-time stock price. symbol: ticker like 'GOOG', 'AAPL'."""
+```
+
+Developer Pydantic errors are kept as-is. The executor's job is structuring them into the `Input` / `Error` / `Expected` format, not rewriting the messages.
+
+### `describe_tool` — Deep-Dive When Confused
+
+If `search_tools` returns concise signatures but the agent still isn't sure how to use a tool, it can call:
+
+```python
+describe_tool(name="search_web")
+```
+
+This returns the **full docstring with examples**:
+
+```python
+def search_web(query: str, max_results: int = 5) -> list[dict]:
+    """Search the web for information using a text query.
+
+    Args:
+        query: Natural language search query. Be specific for better results.
+        max_results: Number of results to return (1-20).
+
+    Examples:
+        search_web(query="Python asyncio tutorial")
+        search_web(query="GOOG stock price today", max_results=3)
+    """
+```
+
+This is **only called when needed** — most of the time, the concise signature from `search_tools` is enough. Think of it as the agent flipping from the index to reading the full chapter.
+
 ---
 
 ## System Architecture
@@ -146,7 +242,7 @@ This is exactly what IDEs, linters, and code highlighters do — parse the synta
 ```
 ┌──────────────────────────────────────────────────┐
 │                   AI Agent (LLM)                  │
-│          Only sees: search_tools + execute        │
+│   Only sees: search_tools + execute + describe    │
 └──────────┬──────────────────┬─────────────────────┘
            │                  │
      search_tools(q)     execute(calls)
@@ -190,29 +286,56 @@ Tools are Python functions with a `@tool` decorator:
 from ai_tools_executor import tool
 
 @tool(
-    description="Get real-time stock price",
+    description="Fetch real-time stock price. symbol: ticker like 'GOOG', 'AAPL'.",
     category="finance",
     tags=["stock", "price", "market"]
 )
 def get_stock_price(symbol: str) -> dict:
-    """Fetch real-time stock price. symbol: ticker like 'GOOG', 'AAPL'."""
+    """Fetch real-time stock price for a given ticker symbol.
+
+    Args:
+        symbol: Stock ticker symbol (e.g. 'GOOG', 'AAPL', 'MSFT').
+                Must be 1-5 uppercase letters.
+
+    Examples:
+        get_stock_price(symbol="GOOG")
+        get_stock_price(symbol="AAPL")
+    """
     # ... implementation
     return {"symbol": symbol, "price": 182.63, "currency": "USD"}
 
 
 @tool(
-    description="Search the web for information",
+    description="Search the web for information using a text query.",
     category="search",
     tags=["web", "search", "google"]
 )
 def search_web(query: str, max_results: int = 5) -> list[dict]:
-    """Search the web for information using a text query."""
+    """Search the web for information.
+
+    Args:
+        query: Natural language search query. Be specific for better results.
+        max_results: Number of results to return (1-20).
+
+    Examples:
+        search_web(query="Python asyncio tutorial")
+        search_web(query="GOOG stock price today", max_results=3)
+    """
     # ... implementation
     return [{"title": "...", "url": "...", "snippet": "..."}]
 ```
 
-The decorator:
-1. Extracts parameter names, types, and defaults from the function signature
+The decorator registers two separate description fields in the registry:
+
+| Field | Used by | Content | Source |
+|---|---|---|---|
+| `description` | `search_tools`, error `Expected` field | Short — what the tool does + param hints if names aren't clear | Decorator `description` param (required) |
+| `doc_str` | `describe_tool` | Full — args, constraints, examples | **Always auto-processed from the function's docstring** |
+
+`doc_str` is never set manually in the decorator — it's always extracted from the function's own docstring. This keeps the source of truth in one place and follows standard Python conventions.
+
+The decorator also:
+1. Extracts parameter names, types, and defaults from the function signature automatically
 2. Registers the tool in the global registry
 3. Does **not** inject anything into the agent's context
 
@@ -224,7 +347,7 @@ The decorator:
 
 ```
 ┌─ Turn 1 ──────────────────────────────────────────────────────┐
-│ Agent context: system prompt + 2 meta-tools (~500 tokens)     │
+│ Agent context: system prompt + 3 meta-tools (~500 tokens)     │
 │                                                                │
 │ Agent thinks: "I need to look up a stock price and check       │
 │                weather for a city"                             │
@@ -288,7 +411,7 @@ Additional savings from function call syntax vs JSON per individual tool call: *
 
 | Project | What they do | Our difference |
 |---|---|---|
-| **Cloudflare Code Mode** | 2 tools (search + execute), TypeScript code in V8 sandbox | We use Python function syntax + AST parsing, no sandbox needed |
+| **Cloudflare Code Mode** | 2 tools (search + execute), TypeScript code in V8 sandbox | 3 meta-tools, Python function syntax + AST parsing, no sandbox needed |
 | **Anthropic Tool Search** | Lazy search, but still JSON tool calling after discovery | We skip JSON entirely, use function call syntax |
 | **Spring AI Dynamic Discovery** | Semantic search for tools, portable across LLM providers | Similar search approach, but we add function-call execution |
 
@@ -296,10 +419,12 @@ Additional savings from function call syntax vs JSON per individual tool call: *
 
 ## Design Principles
 
-1. **Minimal context** — Agent only ever sees 2 tools, never the full registry
+1. **Minimal context** — Agent only ever sees 3 meta-tools, never the full registry
 2. **Native syntax** — Function calls, not JSON. LLMs are trained on code.
 3. **Safe parsing** — `ast.parse()` validates syntax without execution. Like an IDE, not a runtime.
-4. **Parallel execution** — Multiple independent calls in one `execute()` run concurrently
-5. **Provider agnostic** — Works with any LLM that can generate text (OpenAI, Anthropic, Gemini, local models)
-6. **Pluggable search** — Swap keyword/fuzzy/semantic strategies via config
-7. **Hot-reload** — Register and unregister tools at runtime without restarting
+4. **Fail informatively** — Errors always include what was sent, what was expected, and why it failed. The agent should never need to guess.
+5. **Registry never touches context** — No auto-injection, no framework magic. The only way tools reach the agent is through `search_tools`.
+6. **Parallel execution** — Multiple independent calls in one `execute()` run concurrently, with partial results on partial failure.
+7. **Provider agnostic** — Works with any LLM that can generate text (OpenAI, Anthropic, Gemini, local models)
+8. **Pluggable search** — Swap keyword/fuzzy/semantic strategies via config
+9. **Hot-reload** — Register and unregister tools at runtime without restarting
