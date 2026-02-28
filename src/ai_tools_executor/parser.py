@@ -11,6 +11,7 @@ like an IDE or linter would do.
 from __future__ import annotations
 
 import ast
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,8 @@ from ai_tools_executor.exceptions import ParseError, ValidationError
 if TYPE_CHECKING:
     from ai_tools_executor.decorator import ToolInfo
     from ai_tools_executor.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,9 +57,11 @@ def parse_calls(raw: str, registry: ToolRegistry) -> list[ParsedCall]:
         issues.
     """
     raw = raw.strip()
+    logger.debug("Parsing call string: %r", raw)
     try:
         tree = ast.parse(raw, mode="eval")
     except SyntaxError as exc:
+        logger.debug("Parse failed with SyntaxError: %s", exc.msg)
         raise ParseError(
             "Failed to parse tool call",
             input_text=raw,

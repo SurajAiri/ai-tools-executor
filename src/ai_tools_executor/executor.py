@@ -10,6 +10,7 @@ Exposes the three meta-tools that an AI agent interacts with:
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from ai_tools_executor.exceptions import (
@@ -25,6 +26,8 @@ from ai_tools_executor.search import (
     SearchStrategy,
     format_search_results,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ToolExecutor:
@@ -62,10 +65,14 @@ class ToolExecutor:
         Returns compact function signatures with one-line descriptions,
         ready to be consumed by the agent.
         """
+        logger.debug(
+            "search_tools called with query=%r, max_results=%d", query, max_results,
+        )
         all_tools = self.registry.list_all()
         matched = self.search_strategy.search(
             query, all_tools, max_results=max_results,
         )
+        logger.info("search_tools query=%r matched %d tool(s)", query, len(matched))
         return format_search_results(matched, query)
 
     # ── Meta-tool 2: execute ──────────────────────────────────────────
@@ -86,12 +93,14 @@ class ToolExecutor:
             ``.model_dump()`` or ``.model_dump_json()`` when you
             need a serialisable form.
         """
+        logger.debug("execute called with calls=%r", calls)
         # Phase 1: parse & validate all calls
         try:
             parsed: list[ParsedCall] = parse_calls(
                 calls, self.registry,
             )
         except ToolExecutorError as exc:
+            logger.warning("execute parse/validation failed: %s", exc)
             return [
                 ToolCallResult(
                     tool="unknown",
@@ -100,6 +109,7 @@ class ToolExecutor:
                 )
             ]
 
+        logger.debug("Parsed %d call(s), executing", len(parsed))
         # Phase 2: execute each call independently (partial failure)
         return [self._run_single(pc, calls) for pc in parsed]
 
@@ -111,11 +121,13 @@ class ToolExecutor:
         Independent calls are run concurrently via
         :func:`asyncio.gather`.
         """
+        logger.debug("execute_async called with calls=%r", calls)
         try:
             parsed: list[ParsedCall] = parse_calls(
                 calls, self.registry,
             )
         except ToolExecutorError as exc:
+            logger.warning("execute_async parse/validation failed: %s", exc)
             return [
                 ToolCallResult(
                     tool="unknown",
@@ -124,6 +136,7 @@ class ToolExecutor:
                 )
             ]
 
+        logger.debug("Parsed %d call(s), executing concurrently", len(parsed))
         tasks = [
             asyncio.to_thread(self._run_single, pc, calls)
             for pc in parsed
@@ -138,9 +151,11 @@ class ToolExecutor:
         This is the "deep-dive" meta-tool — only called when the agent
         needs more context than ``search_tools`` provides.
         """
+        logger.debug("describe_tool called for name=%r", name)
         try:
             tool_info = self.registry.get(name)
         except ToolNotFoundError as exc:
+            logger.warning("describe_tool: tool %r not found", name)
             return exc.format()
         return tool_info.full_description()
 
@@ -154,12 +169,14 @@ class ToolExecutor:
         """Execute a single parsed call and return a typed result."""
         try:
             result = pc.tool_info.func(**pc.kwargs)
+            logger.info("Tool %r executed successfully", pc.name)
             return ToolCallResult(
                 tool=pc.name,
                 status=CallStatus.OK,
                 result=result,
             )
         except Exception as exc:  # noqa: BLE001
+            logger.error("Tool %r raised %s: %s", pc.name, type(exc).__name__, exc)
             err = ExecutionError(
                 str(exc),
                 input_text=raw_input,

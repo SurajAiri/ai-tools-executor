@@ -28,6 +28,7 @@ from ai_tools_executor.exceptions import (
     ValidationError,
 )
 from ai_tools_executor.executor import ToolExecutor
+from ai_tools_executor.logger import setup_logging
 from ai_tools_executor.meta_tools import get_meta_tools_schema, handle_tool_call
 from ai_tools_executor.models import CallStatus, ToolCallResult
 from ai_tools_executor.registry import (
@@ -54,6 +55,8 @@ __all__ = [
     # Meta-tools
     "get_meta_tools_schema",
     "handle_tool_call",
+    # Logging
+    "setup_logging",
     # Registry helpers
     "get_default_registry",
     "reset_default_registry",

@@ -7,6 +7,7 @@ first access via :func:`get_default_registry`.
 
 from __future__ import annotations
 
+import logging
 import threading
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,8 @@ from ai_tools_executor.exceptions import (
 
 if TYPE_CHECKING:
     from ai_tools_executor.decorator import ToolInfo
+
+logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
@@ -45,6 +48,9 @@ class ToolRegistry:
                     input_text=tool_info.name,
                 )
             self._tools[tool_info.name] = tool_info
+            logger.debug(
+                "Registered tool %r (category=%r)", tool_info.name, tool_info.category,
+            )
 
     def unregister(self, name: str) -> None:
         """Remove a tool by name (hot-reload support).
@@ -58,11 +64,14 @@ class ToolRegistry:
                     input_text=name,
                 )
             del self._tools[name]
+            logger.debug("Unregistered tool %r", name)
 
     def clear(self) -> None:
         """Remove all tools.  Primarily useful in tests."""
         with self._lock:
+            count = len(self._tools)
             self._tools.clear()
+            logger.debug("Cleared registry (%d tool(s) removed)", count)
 
     # ── Lookup ────────────────────────────────────────────────────────
 

@@ -24,7 +24,12 @@ import sys
 
 import litellm
 
-from ai_tools_executor import ToolExecutor, get_meta_tools_schema, handle_tool_call, tool
+from ai_tools_executor import (
+    ToolExecutor,
+    get_meta_tools_schema,
+    handle_tool_call,
+    tool,
+)
 
 # ─── Register some sample tools ──────────────────────────────────────
 

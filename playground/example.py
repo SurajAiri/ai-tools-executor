@@ -1,6 +1,11 @@
-from ai_tools_executor import tool
+from ai_tools_executor import ToolExecutor, tool
 
-@tool(description="Fetch real-time stock price.", category="finance", tags=["stock", "price"])
+
+@tool(
+    description="Fetch real-time stock price.",
+    category="finance",
+    tags=["stock", "price"],
+)
 def get_stock_price(symbol: str) -> dict:
     """Fetch real-time stock price for a ticker symbol.
 
@@ -13,7 +18,11 @@ def get_stock_price(symbol: str) -> dict:
     return {"symbol": symbol, "price": 182.63, "currency": "USD"}
 
 
-@tool(description="Search the web for information.", category="search", tags=["web", "google"])
+@tool(
+    description="Search the web for information.",
+    category="search",
+    tags=["web", "google"],
+)
 def search_web(query: str, max_results: int = 5) -> list[dict]:
     """Search the web using a text query.
 
@@ -23,7 +32,12 @@ def search_web(query: str, max_results: int = 5) -> list[dict]:
     """
     return [{"title": "...", "url": "...", "snippet": "..."}]
 
-@tool(description="Get current weather for a city.", category="weather", tags=["weather", "temperature", "forecast"])
+
+@tool(
+    description="Get current weather for a city.",
+    category="weather",
+    tags=["weather", "temperature", "forecast"],
+)
 def get_weather(city: str, units: str = "celsius") -> dict:
     """Get current weather for a city.
 
@@ -33,28 +47,30 @@ def get_weather(city: str, units: str = "celsius") -> dict:
     """
     return {"city": city, "temperature": 25, "units": units}
 
+
 # math
 @tool(description="Add two numbers.", category="math", tags=["add"])
 def add(a: int, b: int) -> int:
     """Add two numbers."""
     return a + b
 
+
 @tool(description="Subtract two numbers.", category="math", tags=["subtract"])
 def subtract(a: int, b: int) -> int:
     """Subtract two numbers."""
     return a - b
+
 
 @tool(description="Multiply two numbers.", category="math", tags=["multiply"])
 def multiply(a: int, b: int) -> int:
     """Multiply two numbers."""
     return a * b
 
+
 @tool(description="Divide two numbers.", category="math", tags=["divide"])
 def divide(a: int, b: int) -> int:
     """Divide two numbers."""
     return a / b
-
-from ai_tools_executor import ToolExecutor
 
 
 def main():
@@ -77,8 +93,7 @@ def main():
     # Execute multiple calls at once
     print("=== Execute: multi-call ===")
     results = executor.execute(
-        "[get_stock_price(symbol='GOOG'),"
-        " search_web(query='market trends')]"
+        "[get_stock_price(symbol='GOOG'), search_web(query='market trends')]"
     )
     for r in results:
         print(f"  {r.tool}: ok={r.ok}, result={r.result}")

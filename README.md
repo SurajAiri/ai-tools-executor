@@ -234,7 +234,7 @@ uv run ruff check src/ tests/
 
 ## Requirements
 
-- Python ≥ 3.12
+- Python ≥ 3.10
 - No external dependencies (stdlib only)
 
 ## License
