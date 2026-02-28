@@ -120,8 +120,8 @@ def format_search_results(tools: list[ToolInfo], query: str) -> str:
     if not tools:
         return f'No tools found for: "{query}"'
 
-    header = f'# Results for: "{query}"\n'
+    header = f'# Tools matching: "{query}"\n'
     blocks = [header]
     for t in tools:
         blocks.append(t.short_summary())
-    return "\n\n".join(blocks)
+    return "\n".join(blocks)
