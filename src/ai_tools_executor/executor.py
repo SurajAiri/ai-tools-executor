@@ -10,7 +10,6 @@ Exposes the three meta-tools that an AI agent interacts with:
 from __future__ import annotations
 
 import asyncio
-import traceback
 from typing import Any
 
 from ai_tools_executor.exceptions import (
@@ -18,6 +17,7 @@ from ai_tools_executor.exceptions import (
     ToolExecutorError,
     ToolNotFoundError,
 )
+from ai_tools_executor.models import CallStatus, ToolCallResult
 from ai_tools_executor.parser import ParsedCall, parse_calls
 from ai_tools_executor.registry import ToolRegistry, get_default_registry
 from ai_tools_executor.search import (
@@ -45,7 +45,9 @@ class ToolExecutor:
         search_strategy: SearchStrategy | None = None,
     ) -> None:
         self.registry = registry or get_default_registry()
-        self.search_strategy = search_strategy or KeywordSearchStrategy()
+        self.search_strategy = (
+            search_strategy or KeywordSearchStrategy()
+        )
 
     # ── Meta-tool 1: search_tools ─────────────────────────────────────
 
@@ -68,7 +70,7 @@ class ToolExecutor:
 
     # ── Meta-tool 2: execute ──────────────────────────────────────────
 
-    def execute(self, calls: str) -> list[dict[str, Any]]:
+    def execute(self, calls: str) -> list[ToolCallResult]:
         """Parse, validate, and run one or more tool calls.
 
         Parameters
@@ -79,40 +81,52 @@ class ToolExecutor:
 
         Returns
         -------
-        list[dict]:
-            One result dict per call, each with keys:
-
-            - ``tool`` — the tool name
-            - ``status`` — ``"ok"`` or ``"error"``
-            - ``result`` — the return value (on success)
-            - ``error`` — formatted error string (on failure)
+        list[ToolCallResult]:
+            One :class:`ToolCallResult` per call.  Use
+            ``.model_dump()`` or ``.model_dump_json()`` when you
+            need a serialisable form.
         """
         # Phase 1: parse & validate all calls
         try:
-            parsed: list[ParsedCall] = parse_calls(calls, self.registry)
+            parsed: list[ParsedCall] = parse_calls(
+                calls, self.registry,
+            )
         except ToolExecutorError as exc:
-            return [{"tool": "unknown", "status": "error", "error": exc.format()}]
+            return [
+                ToolCallResult(
+                    tool="unknown",
+                    status=CallStatus.ERROR,
+                    error=exc.format(),
+                )
+            ]
 
         # Phase 2: execute each call independently (partial failure)
-        results: list[dict[str, Any]] = []
-        for pc in parsed:
-            results.append(self._run_single(pc, calls))
+        return [self._run_single(pc, calls) for pc in parsed]
 
-        return results
-
-    async def execute_async(self, calls: str) -> list[dict[str, Any]]:
+    async def execute_async(
+        self, calls: str,
+    ) -> list[ToolCallResult]:
         """Async version of :meth:`execute`.
 
         Independent calls are run concurrently via
         :func:`asyncio.gather`.
         """
         try:
-            parsed: list[ParsedCall] = parse_calls(calls, self.registry)
+            parsed: list[ParsedCall] = parse_calls(
+                calls, self.registry,
+            )
         except ToolExecutorError as exc:
-            return [{"tool": "unknown", "status": "error", "error": exc.format()}]
+            return [
+                ToolCallResult(
+                    tool="unknown",
+                    status=CallStatus.ERROR,
+                    error=exc.format(),
+                )
+            ]
 
         tasks = [
-            asyncio.to_thread(self._run_single, pc, calls) for pc in parsed
+            asyncio.to_thread(self._run_single, pc, calls)
+            for pc in parsed
         ]
         return list(await asyncio.gather(*tasks))
 
@@ -136,11 +150,15 @@ class ToolExecutor:
         self,
         pc: ParsedCall,
         raw_input: str,
-    ) -> dict[str, Any]:
-        """Execute a single :class:`ParsedCall` and return a result dict."""
+    ) -> ToolCallResult:
+        """Execute a single parsed call and return a typed result."""
         try:
             result = pc.tool_info.func(**pc.kwargs)
-            return {"tool": pc.name, "status": "ok", "result": result}
+            return ToolCallResult(
+                tool=pc.name,
+                status=CallStatus.OK,
+                result=result,
+            )
         except Exception as exc:  # noqa: BLE001
             err = ExecutionError(
                 str(exc),
@@ -148,7 +166,11 @@ class ToolExecutor:
                 expected=pc.tool_info.short_summary(),
                 hint=_extract_hint(exc),
             )
-            return {"tool": pc.name, "status": "error", "error": err.format()}
+            return ToolCallResult(
+                tool=pc.name,
+                status=CallStatus.ERROR,
+                error=err.format(),
+            )
 
 
 def _extract_hint(exc: Exception) -> str | None:
@@ -157,10 +179,13 @@ def _extract_hint(exc: Exception) -> str | None:
     Returns ``None`` when no actionable suggestion can be made.
     """
     # Pydantic ValidationError
-    if type(exc).__name__ == "ValidationError" and hasattr(exc, "errors"):
+    if type(exc).__name__ == "ValidationError" and hasattr(
+        exc, "errors",
+    ):
         try:
             msgs = [
-                f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
+                f"{'.'.join(str(loc) for loc in e['loc'])}"
+                f": {e['msg']}"
                 for e in exc.errors()  # type: ignore[union-attr]
             ]
             return "Validation issues: " + "; ".join(msgs)

@@ -55,25 +55,45 @@ def divide(a: int, b: int) -> int:
     return a / b
 
 from ai_tools_executor import ToolExecutor
+
+
 def main():
     executor = ToolExecutor()
 
     # Meta-tool 1: Search for tools by intent
+    print("=== Search: 'stock price lookup' ===")
     print(executor.search_tools("stock price lookup"))
-    # def get_stock_price(symbol: str) -> dict:
-    #     """Fetch real-time stock price."""
+    print()
 
-    # Meta-tool 2: Execute tool calls using Python syntax
+    # Meta-tool 2: Execute a single call
+    print("=== Execute: get_stock_price ===")
     results = executor.execute("get_stock_price(symbol='GOOG')")
-    print(f"Results: {results}")
-    # [{'tool': 'get_stock_price', 'status': 'ok', 'result': {'symbol': 'GOOG', 'price': 182.63, 'currency': 'USD'}}]
+    r = results[0]
+    print(f"  ok:     {r.ok}")
+    print(f"  tool:   {r.tool}")
+    print(f"  result: {r.result}")
+    print()
 
     # Execute multiple calls at once
-    results = executor.execute("[get_stock_price(symbol='GOOG'), search_web(query='market trends')]")
-    print(f"Results: {results}")
+    print("=== Execute: multi-call ===")
+    results = executor.execute(
+        "[get_stock_price(symbol='GOOG'),"
+        " search_web(query='market trends')]"
+    )
+    for r in results:
+        print(f"  {r.tool}: ok={r.ok}, result={r.result}")
+    print()
+
+    # Serialise for transport
+    print("=== Serialisation ===")
+    print(f"  to_dict: {results[0].to_dict()}")
+    print(f"  to_json: {results[0].to_json()}")
+    print()
 
     # Meta-tool 3: Get detailed docs when needed
-    # print(executor.describe_tool("search_web"))
+    print("=== Describe: search_web ===")
+    print(executor.describe_tool("search_web"))
+
 
 if __name__ == "__main__":
     main()

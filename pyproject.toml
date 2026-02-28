@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-tools-executor"
-version = "0.1.0"
+version = "0.2.0"
 description = "An executor layer between AI agents and tools — 3 meta-tools, function-call syntax, AST parsing."
 readme = "README.md"
 authors = [

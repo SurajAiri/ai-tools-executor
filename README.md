@@ -75,10 +75,19 @@ print(executor.search_tools("stock price lookup"))
 
 # Meta-tool 2: Execute tool calls using Python syntax
 results = executor.execute("get_stock_price(symbol='GOOG')")
-# [{'tool': 'get_stock_price', 'status': 'ok', 'result': {'symbol': 'GOOG', 'price': 182.63, 'currency': 'USD'}}]
+r = results[0]
+r.ok        # True
+r.tool      # "get_stock_price"
+r.result    # {"symbol": "GOOG", "price": 182.63, "currency": "USD"}
 
 # Execute multiple calls at once
-results = executor.execute("[get_stock_price(symbol='GOOG'), search_web(query='market trends')]")
+results = executor.execute(
+    "[get_stock_price(symbol='GOOG'), search_web(query='market trends')]"
+)
+
+# Serialise for transport when needed
+r.to_dict()  # plain dict
+r.to_json()  # JSON string
 
 # Meta-tool 3: Get detailed docs when needed
 print(executor.describe_tool("search_web"))
@@ -119,11 +128,13 @@ tree = ast.parse('get_stock_price(symbol="GOOG")', mode="eval")
 When some calls succeed and others fail, you get **both**:
 
 ```python
-results = executor.execute("[get_stock_price(symbol='GOOG'), bad_tool(x=1)]")
-# [
-#   {'tool': 'get_stock_price', 'status': 'ok', 'result': {...}},
-#   {'tool': 'bad_tool', 'status': 'error', 'error': 'ToolNotFoundError: ...'}
-# ]
+results = executor.execute(
+    "[get_stock_price(symbol='GOOG'), bad_tool(x=1)]"
+)
+results[0].ok      # True  — stock price succeeded
+results[0].result  # {"symbol": "GOOG", "price": 182.63, ...}
+results[1].ok      # False — bad_tool failed
+results[1].error   # "ToolNotFoundError: Tool 'bad_tool' not found ..."
 ```
 
 ### Structured Error Messages
@@ -199,6 +210,7 @@ src/ai_tools_executor/
 ├── decorator.py     # @tool decorator, ToolInfo, ParameterInfo
 ├── exceptions.py    # Structured error hierarchy
 ├── executor.py      # ToolExecutor (3 meta-tools)
+├── models.py        # ToolCallResult, CallStatus (frozen dataclasses)
 ├── parser.py        # AST call parser + Layer 1 validation
 ├── registry.py      # Thread-safe ToolRegistry
 └── search.py        # Pluggable search strategies

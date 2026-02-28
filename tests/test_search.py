@@ -71,7 +71,7 @@ class TestKeywordSearch:
 class TestFormatResults:
     def test_formats_with_header(self):
         output = format_search_results([STOCK_PRICE_INFO], "stock")
-        assert '# Results for: "stock"' in output
+        assert '# Tools matching: "stock"' in output
         assert "def get_stock_price" in output
         assert '"""Fetch real-time stock price' in output
 

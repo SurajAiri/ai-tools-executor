@@ -28,6 +28,7 @@ from ai_tools_executor.exceptions import (
     ValidationError,
 )
 from ai_tools_executor.executor import ToolExecutor
+from ai_tools_executor.models import CallStatus, ToolCallResult
 from ai_tools_executor.registry import (
     ToolRegistry,
     get_default_registry,
@@ -40,7 +41,10 @@ __all__ = [
     "tool",
     "ToolExecutor",
     "ToolRegistry",
-    # Models
+    # Result models
+    "ToolCallResult",
+    "CallStatus",
+    # Data models
     "ToolInfo",
     "ParameterInfo",
     # Search
@@ -58,4 +62,4 @@ __all__ = [
     "ExecutionError",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

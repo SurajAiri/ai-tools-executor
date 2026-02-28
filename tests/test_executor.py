@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from ai_tools_executor.executor import ToolExecutor
+from ai_tools_executor.models import CallStatus, ToolCallResult
 from ai_tools_executor.registry import ToolRegistry
 
 from .conftest import (
@@ -32,60 +33,106 @@ class TestSearchTools:
 
 
 class TestExecute:
+    def test_returns_pydantic_models(self, executor: ToolExecutor):
+        results = executor.execute(
+            "get_stock_price(symbol='GOOG')",
+        )
+        assert isinstance(results[0], ToolCallResult)
+
     def test_single_call_success(self, executor: ToolExecutor):
-        results = executor.execute("get_stock_price(symbol='GOOG')")
+        results = executor.execute(
+            "get_stock_price(symbol='GOOG')",
+        )
         assert len(results) == 1
-        assert results[0]["status"] == "ok"
-        assert results[0]["tool"] == "get_stock_price"
-        assert results[0]["result"]["price"] == 182.63
+        assert results[0].status == CallStatus.OK
+        assert results[0].ok is True
+        assert results[0].tool == "get_stock_price"
+        assert results[0].result["price"] == 182.63
 
     def test_multi_call_success(self, executor: ToolExecutor):
-        raw = "[get_stock_price(symbol='GOOG'), get_weather(city='London')]"
+        raw = (
+            "[get_stock_price(symbol='GOOG'),"
+            " get_weather(city='London')]"
+        )
         results = executor.execute(raw)
         assert len(results) == 2
-        assert all(r["status"] == "ok" for r in results)
-        assert results[0]["result"]["symbol"] == "GOOG"
-        assert results[1]["result"]["city"] == "London"
+        assert all(r.ok for r in results)
+        assert results[0].result["symbol"] == "GOOG"
+        assert results[1].result["city"] == "London"
 
     def test_partial_failure(self, executor: ToolExecutor):
-        raw = "[get_stock_price(symbol='GOOG'), failing_tool(x=42)]"
+        raw = (
+            "[get_stock_price(symbol='GOOG'),"
+            " failing_tool(x=42)]"
+        )
         results = executor.execute(raw)
         assert len(results) == 2
         # First call succeeds
-        assert results[0]["status"] == "ok"
-        assert results[0]["result"]["price"] == 182.63
+        assert results[0].ok is True
+        assert results[0].result["price"] == 182.63
         # Second call fails
-        assert results[1]["status"] == "error"
-        assert "Bad value: 42" in results[1]["error"]
+        assert results[1].ok is False
+        assert results[1].status == CallStatus.ERROR
+        assert "Bad value: 42" in results[1].error
 
-    def test_syntax_error_returns_error_dict(self, executor: ToolExecutor):
+    def test_syntax_error_returns_error(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("broken(")
         assert len(results) == 1
-        assert results[0]["status"] == "error"
-        assert "tool" in results[0]
+        assert results[0].status == CallStatus.ERROR
+        assert results[0].tool == "unknown"
 
-    def test_unknown_tool_returns_error_dict(self, executor: ToolExecutor):
+    def test_unknown_tool_returns_error(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("nonexistent(x=1)")
         assert len(results) == 1
-        assert results[0]["status"] == "error"
+        assert results[0].ok is False
 
-    def test_missing_param_returns_error_dict(self, executor: ToolExecutor):
+    def test_missing_param_returns_error(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("get_stock_price()")
         assert len(results) == 1
-        assert results[0]["status"] == "error"
-        assert "Missing required" in results[0]["error"]
+        assert results[0].ok is False
+        assert "Missing required" in results[0].error
 
-    def test_optional_param_uses_default(self, executor: ToolExecutor):
+    def test_optional_param_uses_default(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("search_web(query='test')")
-        assert results[0]["status"] == "ok"
+        assert results[0].ok is True
 
-    def test_optional_param_override(self, executor: ToolExecutor):
-        results = executor.execute("search_web(query='test', max_results=3)")
-        assert results[0]["status"] == "ok"
+    def test_optional_param_override(
+        self, executor: ToolExecutor,
+    ):
+        raw = "search_web(query='test', max_results=3)"
+        results = executor.execute(raw)
+        assert results[0].ok is True
+
+    def test_to_dict(self, executor: ToolExecutor):
+        results = executor.execute(
+            "get_stock_price(symbol='GOOG')",
+        )
+        d = results[0].to_dict()
+        assert isinstance(d, dict)
+        assert d["tool"] == "get_stock_price"
+        assert d["status"] == "ok"
+
+    def test_to_json(self, executor: ToolExecutor):
+        results = executor.execute(
+            "get_stock_price(symbol='GOOG')",
+        )
+        json_str = results[0].to_json()
+        assert isinstance(json_str, str)
+        assert "get_stock_price" in json_str
 
 
 class TestDescribeTool:
-    def test_returns_full_docstring(self, executor: ToolExecutor):
+    def test_returns_full_docstring(
+        self, executor: ToolExecutor,
+    ):
         result = executor.describe_tool("get_stock_price")
         assert "def get_stock_price" in result
         assert "ticker symbol" in result
@@ -96,40 +143,59 @@ class TestDescribeTool:
 
 
 class TestErrorFormat:
-    def test_error_includes_input(self, executor: ToolExecutor):
+    def test_error_includes_input(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("get_stock_price()")
-        error_text = results[0]["error"]
-        assert "Input:" in error_text
+        assert "Input:" in results[0].error
 
-    def test_error_includes_expected(self, executor: ToolExecutor):
+    def test_error_includes_expected(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("get_stock_price()")
-        error_text = results[0]["error"]
-        assert "Expected:" in error_text
+        assert "Expected:" in results[0].error
 
-    def test_execution_error_includes_tool_name(self, executor: ToolExecutor):
+    def test_execution_error_includes_tool_name(
+        self, executor: ToolExecutor,
+    ):
         results = executor.execute("failing_tool(x=99)")
-        assert results[0]["tool"] == "failing_tool"
-        assert results[0]["status"] == "error"
-        assert "Bad value: 99" in results[0]["error"]
+        assert results[0].tool == "failing_tool"
+        assert results[0].ok is False
+        assert "Bad value: 99" in results[0].error
 
 
 class TestExecuteAsync:
     @pytest.mark.asyncio
-    async def test_async_single_call(self, executor: ToolExecutor):
-        results = await executor.execute_async("get_stock_price(symbol='GOOG')")
+    async def test_async_single_call(
+        self, executor: ToolExecutor,
+    ):
+        results = await executor.execute_async(
+            "get_stock_price(symbol='GOOG')",
+        )
         assert len(results) == 1
-        assert results[0]["status"] == "ok"
+        assert results[0].ok is True
+        assert isinstance(results[0], ToolCallResult)
 
     @pytest.mark.asyncio
-    async def test_async_multi_call(self, executor: ToolExecutor):
-        raw = "[get_stock_price(symbol='GOOG'), get_weather(city='NYC')]"
+    async def test_async_multi_call(
+        self, executor: ToolExecutor,
+    ):
+        raw = (
+            "[get_stock_price(symbol='GOOG'),"
+            " get_weather(city='NYC')]"
+        )
         results = await executor.execute_async(raw)
         assert len(results) == 2
-        assert all(r["status"] == "ok" for r in results)
+        assert all(r.ok for r in results)
 
     @pytest.mark.asyncio
-    async def test_async_partial_failure(self, executor: ToolExecutor):
-        raw = "[get_stock_price(symbol='GOOG'), failing_tool(x=0)]"
+    async def test_async_partial_failure(
+        self, executor: ToolExecutor,
+    ):
+        raw = (
+            "[get_stock_price(symbol='GOOG'),"
+            " failing_tool(x=0)]"
+        )
         results = await executor.execute_async(raw)
-        assert results[0]["status"] == "ok"
-        assert results[1]["status"] == "error"
+        assert results[0].ok is True
+        assert results[1].ok is False
