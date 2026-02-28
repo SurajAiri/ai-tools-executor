@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-tools-executor"
+version = "0.0.1"
+description = "This project is a executor layer between AI Agents and AI Tools. Where Agent will have only two tools, i.e search and execute tool. The Tool Executor will internally search the tool, so that AI agent can only import the required tools rather than filling context with useless tools."
+readme = "README.md"
+authors = [
+    { name = "Suraj Airi", email = "surajairi.ml@gmail.com" }
+]
+license = { text = "MIT license" }
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.1",
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
