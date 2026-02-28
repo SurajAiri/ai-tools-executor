@@ -1,5 +1,12 @@
 # AI Tools Executor
 
+[![PyPI version](https://img.shields.io/pypi/v/ai-tools-executor?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/ai-tools-executor/)
+[![Python](https://img.shields.io/pypi/pyversions/ai-tools-executor?logo=python&logoColor=white)](https://pypi.org/project/ai-tools-executor/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/surajairi/ai-tools-executor/blob/main/LICENSE)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://pypi.org/project/ai-tools-executor/)
+[![GitHub stars](https://img.shields.io/github/stars/surajairi/ai-tools-executor?style=flat&logo=github)](https://github.com/surajairi/ai-tools-executor)
+[![GitHub issues](https://img.shields.io/github/issues/surajairi/ai-tools-executor?logo=github)](https://github.com/surajairi/ai-tools-executor/issues)
+
 > An executor layer between AI agents and tools. The agent gets only **3 meta-tools** — tools are discovered on-demand and invoked via **Python function call syntax**, not JSON.
 
 ## The Problem
