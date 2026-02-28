@@ -24,7 +24,7 @@ import sys
 
 import litellm
 
-from ai_tools_executor import ToolExecutor, tool
+from ai_tools_executor import ToolExecutor, get_meta_tools_schema, handle_tool_call, tool
 
 # ─── Register some sample tools ──────────────────────────────────────
 
@@ -51,9 +51,7 @@ def get_stock_price(symbol: str) -> dict:
         "MSFT": 415.20,
         "AMZN": 198.30,
     }
-    price = prices.get(
-        symbol.upper(), round(100 + hash(symbol) % 200, 2)
-    )
+    price = prices.get(symbol.upper(), round(100 + hash(symbol) % 200, 2))
     return {"symbol": symbol.upper(), "price": price, "currency": "USD"}
 
 
@@ -76,8 +74,8 @@ def search_web(query: str, max_results: int = 3) -> list[dict]:
     # Simulated — replace with a real search API
     return [
         {
-            "title": f"Result {i+1} for '{query}'",
-            "url": f"https://example.com/{i+1}",
+            "title": f"Result {i + 1} for '{query}'",
+            "url": f"https://example.com/{i + 1}",
             "snippet": f"Relevant information about {query}...",
         }
         for i in range(max_results)
@@ -125,9 +123,7 @@ def calculate(expression: str) -> dict:
     """
     allowed = set("0123456789+-*/.(). ")
     if not all(c in allowed for c in expression):
-        raise ValueError(
-            f"Invalid characters in expression: {expression}"
-        )
+        raise ValueError(f"Invalid characters in expression: {expression}")
     result = eval(expression)  # noqa: S307 — input is sanitised
     return {"expression": expression, "result": round(result, 6)}
 
@@ -160,101 +156,16 @@ When calling execute, use the exact function signatures returned by search_tools
 
 # ─── Build the 3 meta-tool schemas for LiteLLM ──────────────────────
 
-META_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_tools",
-            "description": (
-                "Search for available tools by describing what "
-                "capability you need. Returns function signatures."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": (
-                            "Natural language description of the "
-                            "capability you need."
-                        ),
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-    "type": "function",
-    "function": {
-        "name": "execute",
-        "description": "Execute one or more tool calls using Python function-call syntax.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "calls": {
-                    "type": "string",
-                    "description": (
-                        "A Python list of function calls to execute. "
-                        "Always pass a list, even for a single tool. "
-                        "Example: \"[get_stock_price(symbol='GOOG'), get_weather(city='London')]\""
-                    ),
-                },
-            },
-            "required": ["calls"],
-        },
-    },
-},
-    {
-        "type": "function",
-        "function": {
-            "name": "describe_tool",
-            "description": (
-                "Get detailed documentation and examples for a "
-                "specific tool. Use when you need more detail."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the tool to describe.",
-                    },
-                },
-                "required": ["name"],
-            },
-        },
-    },
-]
+META_TOOLS = get_meta_tools_schema()
 
 
 # ─── Agent loop ──────────────────────────────────────────────────────
 
 
-def handle_tool_call(
-    executor: ToolExecutor,
-    tool_name: str,
-    arguments: dict,
-) -> str:
-    """Dispatch a meta-tool call and return the result as a string."""
-    if tool_name == "search_tools":
-        return executor.search_tools(arguments["query"])
-    elif tool_name == "execute":
-        results = executor.execute(arguments["calls"])
-        # Convert ToolCallResult objects to dicts for the LLM
-        return json.dumps(
-            [r.to_dict() for r in results], indent=2,
-        )
-    elif tool_name == "describe_tool":
-        return executor.describe_tool(arguments["name"])
-    else:
-        return f"Unknown meta-tool: {tool_name}"
-
-
 def run_agent(
     user_message: str,
-    # model: str = "groq/openai/gpt-oss-20b"
-    model: str = "groq/qwen/qwen3-32b",
+    model: str = "groq/openai/gpt-oss-20b",
+    # model: str = "groq/qwen/qwen3-32b",
     max_turns: int = 10,
 ) -> str:
     """Run a full agent loop with tool calling.
@@ -304,12 +215,16 @@ def run_agent(
                                 print(f"{RED}  ❌ {json.dumps(r, indent=2)}{RESET}")
                             else:
                                 r_str = json.dumps(r)
-                                print(f"  📎 {r_str[:200]}{'...' if len(r_str) > 200 else ''}")
+                                print(
+                                    f"  📎 {r_str[:200]}{'...' if len(r_str) > 200 else ''}"
+                                )
                     else:
                         if result_json.get("status") == "error":
                             print(f"{RED}  ❌ {result}{RESET}")
                         else:
-                            print(f"  📎 {result[:200]}{'...' if len(result) > 200 else ''}")
+                            print(
+                                f"  📎 {result[:200]}{'...' if len(result) > 200 else ''}"
+                            )
                 except json.JSONDecodeError:
                     print(f"  📎 {result[:200]}{'...' if len(result) > 200 else ''}")
 

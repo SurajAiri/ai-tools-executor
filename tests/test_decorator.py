@@ -119,7 +119,7 @@ class TestToolInfoFormatting:
             func=lambda msg: msg,
         )
         summary = info.short_summary()
-        assert 'def echo(msg: str) -> str:' in summary
+        assert "def echo(msg: str) -> str:" in summary
         assert '"""Echo input."""' in summary
 
     def test_full_description_uses_doc_str(self):

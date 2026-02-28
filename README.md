@@ -10,10 +10,10 @@ Every agent framework dumps **all tool schemas** into the LLM context on every t
 
 The agent sees exactly **3 meta-tools**:
 
-| Meta-Tool | Purpose |
-|---|---|
-| `search_tools(query)` | Discover available tools |
-| `execute(calls)` | Run one or more tool calls |
+| Meta-Tool             | Purpose                               |
+| --------------------- | ------------------------------------- |
+| `search_tools(query)` | Discover available tools              |
+| `execute(calls)`      | Run one or more tool calls            |
 | `describe_tool(name)` | Get detailed docs for a specific tool |
 
 Everything else — validation, execution, result formatting — happens behind the scenes.
@@ -105,12 +105,12 @@ print(executor.describe_tool("search_web"))
 get_stock_price(symbol="GOOG")
 ```
 
-| | JSON Tool Calling | Function Call Syntax |
-|---|---|---|
-| **Tokens** | ~20 per call | **~7 per call** (65% less) |
-| **LLM fluency** | Synthetic format | Native — trained on billions of function calls |
-| **Validation** | Custom JSON schema validator | **`ast.parse()`** — same as IDEs/linters |
-| **Error rate** | Higher (JSON syntax errors) | Lower (function calls are natural to LLMs) |
+|                 | JSON Tool Calling            | Function Call Syntax                           |
+| --------------- | ---------------------------- | ---------------------------------------------- |
+| **Tokens**      | ~20 per call                 | **~7 per call** (65% less)                     |
+| **LLM fluency** | Synthetic format             | Native — trained on billions of function calls |
+| **Validation**  | Custom JSON schema validator | **`ast.parse()`** — same as IDEs/linters       |
+| **Error rate**  | Higher (JSON syntax errors)  | Lower (function calls are natural to LLMs)     |
 
 ### Safe AST Parsing
 
@@ -213,6 +213,7 @@ src/ai_tools_executor/
 ├── models.py        # ToolCallResult, CallStatus (frozen dataclasses)
 ├── parser.py        # AST call parser + Layer 1 validation
 ├── registry.py      # Thread-safe ToolRegistry
+├── meta_tools.py    # Meta-tool schema + handle_tool_call handler
 └── search.py        # Pluggable search strategies
 ```
 

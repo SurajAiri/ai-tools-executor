@@ -43,10 +43,7 @@ def _failing_tool(x: int) -> int:
 
 STOCK_PRICE_INFO = ToolInfo(
     name="get_stock_price",
-    description=(
-        "Fetch real-time stock price."
-        " symbol: ticker like 'GOOG', 'AAPL'."
-    ),
+    description=("Fetch real-time stock price. symbol: ticker like 'GOOG', 'AAPL'."),
     doc_str=(
         "Fetch real-time stock price for a given"
         " ticker symbol.\n\nArgs:\n"
@@ -63,10 +60,7 @@ STOCK_PRICE_INFO = ToolInfo(
 
 SEARCH_WEB_INFO = ToolInfo(
     name="search_web",
-    description=(
-        "Search the web for information"
-        " using a text query."
-    ),
+    description=("Search the web for information using a text query."),
     doc_str=(
         "Search the web for information.\n\nArgs:\n"
         "    query: Natural language search query.\n"
@@ -77,11 +71,15 @@ SEARCH_WEB_INFO = ToolInfo(
     tags=["web", "search", "google"],
     parameters=[
         ParameterInfo(
-            name="query", annotation=str, required=True,
+            name="query",
+            annotation=str,
+            required=True,
         ),
         ParameterInfo(
-            name="max_results", annotation=int,
-            default=5, required=False,
+            name="max_results",
+            annotation=int,
+            default=5,
+            required=False,
         ),
     ],
     return_type="list[dict]",
@@ -100,11 +98,15 @@ WEATHER_INFO = ToolInfo(
     tags=["weather", "temperature", "forecast"],
     parameters=[
         ParameterInfo(
-            name="city", annotation=str, required=True,
+            name="city",
+            annotation=str,
+            required=True,
         ),
         ParameterInfo(
-            name="units", annotation=str,
-            default="celsius", required=False,
+            name="units",
+            annotation=str,
+            default="celsius",
+            required=False,
         ),
     ],
     return_type="dict",
